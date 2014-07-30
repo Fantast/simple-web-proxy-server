@@ -1,10 +1,13 @@
 package com.dpaulenk.webproxy.utils;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.*;
 
+import javax.xml.ws.spi.http.HttpHandler;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -61,9 +64,12 @@ public class ProxyUtils {
     }
 
     public static void prepareProxyResponse(HttpResponse res) {
+        boolean keepAlive = HttpHeaders.isKeepAlive(res);
+
         removeHopHeaders(res);
         addViaHeader(res);
-        res.headers().set(CONNECTION, "keep-alive");
+
+        res.headers().set(CONNECTION, keepAlive ? "keep-alive" : "close");
     }
 
 
@@ -228,5 +234,20 @@ public class ProxyUtils {
         }
 
         return -1;
+    }
+
+    public static DefaultFullHttpResponse simpleResponse(HttpResponseStatus status, String body) {
+        if (body == null) {
+            return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status);
+        } else {
+            byte[] bytes = body.getBytes(Charset.forName("UTF-8"));
+            ByteBuf buf = Unpooled.copiedBuffer(bytes);
+
+            DefaultFullHttpResponse res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, buf);
+            res.headers().set(CONTENT_LENGTH, bytes.length);
+            res.headers().set(CONTENT_TYPE, "text/html; charset=UTF-8");
+
+            return res;
+        }
     }
 }

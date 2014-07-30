@@ -1,18 +1,16 @@
 package com.dpaulenk.webproxy.outbound;
 
-import com.dpaulenk.webproxy.WebProxyServer;
 import com.dpaulenk.webproxy.common.AbstractProxyHandler;
 import com.dpaulenk.webproxy.inbound.InboundProxyHandler;
 import com.dpaulenk.webproxy.utils.ProxyUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.codec.http.LastHttpContent;
+import io.netty.handler.codec.http.*;
 import org.apache.log4j.Logger;
 
+import static com.dpaulenk.webproxy.outbound.OutboundHandlerState.DISCONNECTED;
 import static com.dpaulenk.webproxy.outbound.OutboundHandlerState.INITIAL;
 import static com.dpaulenk.webproxy.outbound.OutboundHandlerState.READING_CONTENT;
 
@@ -21,12 +19,11 @@ public class OutboundProxyHandler extends AbstractProxyHandler<HttpResponse, Out
     private static final Logger logger = Logger.getLogger(OutboundProxyHandler.class);
 
     private final InboundProxyHandler inboundHandler;
-    private HttpRequest initialRequest;
 
-    public OutboundProxyHandler(WebProxyServer proxyServer, InboundProxyHandler inboundHandler,
-                                HttpRequest initialRequest) {
+    private boolean isKeepAlive = true;
+
+    public OutboundProxyHandler(InboundProxyHandler inboundHandler) {
         this.inboundHandler = inboundHandler;
-        this.initialRequest = initialRequest;
         setCurrentState(INITIAL);
     }
 
@@ -52,11 +49,12 @@ public class OutboundProxyHandler extends AbstractProxyHandler<HttpResponse, Out
     private void reaInitialResponse(HttpResponse res) {
         ProxyUtils.prepareProxyResponse(res);
 
+        isKeepAlive = isKeepAlive && HttpHeaders.isKeepAlive(res);
+
         inboundHandler.writeToChannel(res);
 
         if (res instanceof LastHttpContent) {
-            setCurrentState(INITIAL);
-            inboundHandler.writeToChannel(Unpooled.EMPTY_BUFFER);
+            onLastChunkWritten();
         } else {
             setCurrentState(READING_CONTENT);
         }
@@ -66,21 +64,41 @@ public class OutboundProxyHandler extends AbstractProxyHandler<HttpResponse, Out
         inboundHandler.writeToChannel(msg);
 
         if (msg instanceof LastHttpContent) {
-            setCurrentState(INITIAL);
-            inboundHandler.writeToChannel(Unpooled.EMPTY_BUFFER);
+            onLastChunkWritten();
         }
+    }
+
+    private void onLastChunkWritten() {
+        setCurrentState(INITIAL);
+        inboundHandler.writeToChannel(Unpooled.EMPTY_BUFFER);
+
+        if (!isKeepAlive) {
+            forceDisconnect();
+        }
+    }
+
+    private void forceDisconnect() {
+        disconnect();
+        inboundHandler.disconnect();
+        setCurrentState(DISCONNECTED);
+    }
+
+    @Override
+    public ChannelFuture writeToChannel(Object msg) {
+        if (msg instanceof HttpRequest) {
+            isKeepAlive = isKeepAlive && HttpHeaders.isKeepAlive((HttpMessage) msg);
+        }
+        return super.writeToChannel(msg);
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        logger.error("Error in inbound handler: ", cause);
-        inboundHandler.disconnect();
-        disconnect();
+        logger.warn("Error in outbound handler: ", cause);
+        forceDisconnect();
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-        inboundHandler.disconnect();
-        disconnect();
+        forceDisconnect();
     }
 }

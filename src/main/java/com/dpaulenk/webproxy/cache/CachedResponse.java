@@ -7,6 +7,8 @@ import io.netty.handler.codec.http.HttpVersion;
 
 public class CachedResponse extends DefaultFullHttpResponse {
 
+    private final int contentSize;
+
     private long birthTime;
 
     private long maxAge;
@@ -15,10 +17,12 @@ public class CachedResponse extends DefaultFullHttpResponse {
 
     public CachedResponse(HttpVersion version, HttpResponseStatus status) {
         super(version, status);
+        contentSize = 0;
     }
 
     public CachedResponse(HttpVersion version, HttpResponseStatus status, ByteBuf content) {
         super(version, status, content);
+        contentSize = content.readableBytes();
     }
 
     public void setBirthTime(long birthTime) {
@@ -35,6 +39,10 @@ public class CachedResponse extends DefaultFullHttpResponse {
 
     public long getLastModified() {
         return lastModified;
+    }
+
+    public int getContentSize() {
+        return contentSize;
     }
 
     public long currentAge() {

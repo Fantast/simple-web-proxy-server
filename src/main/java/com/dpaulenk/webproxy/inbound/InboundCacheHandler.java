@@ -1,7 +1,8 @@
 package com.dpaulenk.webproxy.inbound;
 
+import com.dpaulenk.webproxy.WebProxyServer;
 import com.dpaulenk.webproxy.cache.CachedResponse;
-import com.dpaulenk.webproxy.utils.ProxyUtils;
+import com.dpaulenk.webproxy.cache.ResponseCache;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
@@ -12,19 +13,19 @@ import io.netty.util.ReferenceCountUtil;
 import org.apache.log4j.Logger;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static com.dpaulenk.webproxy.utils.ProxyUtils.*;
-
 import static io.netty.handler.codec.http.HttpHeaders.Names.*;
 
 public class InboundCacheHandler extends ChannelDuplexHandler {
     private static final Logger logger = Logger.getLogger(InboundCacheHandler.class);
 
+    private final ResponseCache responseCache;
+
     private final Queue<HttpRequest> requestsQueue = new LinkedList<HttpRequest>();
 
-    private final int maxCachedContentSize = 8192 * 4; //todo: configurable
-    private final int maxCumulationBufferComponents = 1024; //todo: configurable
+    private final int maxCachedResponseSize;
+    private final int maxCumulationBufferComponents;
 
     private boolean servingFromCache;
 
@@ -34,7 +35,13 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
     private int currentContentLength;
     private boolean isCachable;
 
-    private List<HttpContent> currentResponseChunks = new ArrayList<HttpContent>();
+    private final List<HttpContent> currentResponseChunks = new ArrayList<HttpContent>();
+
+    public InboundCacheHandler(WebProxyServer proxyServer) {
+        responseCache = proxyServer.getResponseCache();
+        maxCachedResponseSize = proxyServer.options().getMaxCachedResponseSize();
+        maxCumulationBufferComponents = proxyServer.options().getMaxCumulationBufferComponents();
+    }
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -88,7 +95,12 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
             HttpContent content = (HttpContent) msg;
 
             currentContentLength += content.content().readableBytes();
-            if (currentContentLength > maxCachedContentSize) {
+            if (currentContentLength > maxCachedResponseSize) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Skip caching " + currentRequest.getUri() + "" +
+                                 ", reason: response length exceeds Maximum Size of : " + maxCachedResponseSize + " bytes");
+                }
+
                 isCachable = false;
                 currentResponseChunks.clear();
             } else {
@@ -107,6 +119,7 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
             ReferenceCountUtil.release(currentRequest);
 
             isCachable = false;
+            currentContentLength = 0;
             currentResponseChunks.clear();
             currentRequest = null;
             currentResponse = null;
@@ -117,17 +130,25 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
 
     private void updateFromNonCachableResponse(HttpRequest currentRequest, HttpResponse currentResponse) {
         //update from 304 NOT MODIFIED responses
+        CachedResponse cached = responseCache.get(currentRequest.getUri());
         if (currentResponse.getStatus().code() == 304) {
             long lastModified = determineLastModified(currentResponse);
             if (lastModified > 0) {
-                CachedResponse cached = cache.get(currentRequest.getUri());
                 if (cached != null) {
                     if (cached.getLastModified() < lastModified) {
-                        //todo: syncronize properly
-                        removeFromCache(currentRequest);
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("Removing " + currentRequest.getUri() + " - reason: expired Last-Modified");
+                        }
+
+                        removeFromCache(currentRequest, cached);
                     }
                 }
             }
+        } else if (cached != null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Removing " + currentRequest.getUri() + " - reason: non-cashable request received");
+            }
+            removeFromCache(currentRequest, cached);
         }
     }
 
@@ -136,12 +157,19 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
      */
     private boolean isCachable(HttpRequest currentRequest, HttpResponse currentResponse) {
         //only cache responses with 200 OK status
+        String uri = currentRequest.getUri();
         if (currentResponse.getStatus().code() != 200) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip caching " + uri + ", reason: response status code: " + currentResponse.getStatus().code());
+            }
             return false;
         }
 
         //only cache GET requests
         if (!HttpMethod.GET.equals(currentRequest.getMethod())) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip caching " + uri + ", reason: request http method: " + currentRequest.getMethod());
+            }
             return false;
         }
 
@@ -149,21 +177,30 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
         //  "If there is neither a cache validator nor an explicit expiration
         //   time associated with a response, we do not expect it to be cached"
         if (!currentRequest.headers().contains(ETAG) && determineMaxAge(currentResponse) == -1) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip caching " + uri + ", reason: request has no explicit expiration time");
+            }
             return false;
         }
 
         // http://tools.ietf.org/html/rfc2616#section-14.9
         if (hasCacheControlValues(currentRequest, "no-cache", "no-store", "max-age=0")) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip caching " + uri + ", reason: request has Cache-Control: " +
+                             currentResponse.headers().getAll(CACHE_CONTROL));
+            }
             return false;
         }
-        if (hasCacheControlValues(currentRequest, "private", "no-cache", "max-age=0", "must-revalidate")) {
+        if (hasCacheControlValues(currentResponse, "private", "no-cache", "max-age=0", "must-revalidate")) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip caching " + uri + ", reason: response has Cache-Control: " +
+                             currentResponse.headers().getAll(CACHE_CONTROL));
+            }
             return false;
         }
 
         return true;
     }
-
-    static Map<String, CachedResponse> cache = new ConcurrentHashMap<String, CachedResponse>();
 
     private void cacheResponse(HttpRequest currentRequest, HttpResponse currentResponse,
                                int currentContentLength, List<HttpContent> currentResponseChunks) {
@@ -181,16 +218,18 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
         cached.setMaxAge(maxAge);
         cached.setLastModified(lastModified);
 
-        cache.put(uri, cached);
+        responseCache.put(uri, cached);
     }
 
     private CachedResponse mergedResponse(HttpResponse currentResponse, int currentContentLength, List<HttpContent> chunks) {
         CompositeByteBuf content = Unpooled.compositeBuffer(maxCumulationBufferComponents);
 
+        int contetLength = 0;
         for (HttpContent chunk : chunks) {
+            contetLength += chunk.content().readableBytes();
             content.addComponent(chunk.content());
         }
-        content.writerIndex(currentContentLength);
+        content.writerIndex(content.writerIndex() + contetLength);
 
         CachedResponse res =
             new CachedResponse(currentResponse.getProtocolVersion(), currentResponse.getStatus(), content);
@@ -216,7 +255,14 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
             if (HttpMethod.PUT.equals(method) ||
                 HttpMethod.DELETE.equals(method) ||
                 HttpMethod.POST.equals(method)) {
-                removeFromCache(req);
+
+                CachedResponse cached = responseCache.get(req.getUri());
+                if (cached != null) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Removing " + req.getUri() + " - reason: modification request: " + method);
+                    }
+                    removeFromCache(req, cached);
+                }
             }
 
             return null;
@@ -224,30 +270,50 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
 
         // http://tools.ietf.org/html/rfc2616#section-14.9
         if (hasCacheControlValues(req, "no-cache", "no-store", "max-age=0")) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Skip lookup for " + req.getUri() +
+                             " - reason: Control-Cache: " + req.headers().getAll(CACHE_CONTROL));
+            }
             return null;
         }
 
         String uri = req.getUri();
 
-        CachedResponse cachedResponse = cache.get(uri);
+        CachedResponse cachedResponse = responseCache.get(uri);
         if (cachedResponse == null) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("No cached entry for " + req.getUri());
+            }
             return null;
         }
 
         long age = determineMaxAge(req);
         if (age != -1 && cachedResponse.expired(age)) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Cached response expired for " + req.getUri() +
+                             "; req.Cached-Control: " + req.headers().getAll(CACHE_CONTROL) +
+                             "; resp.currentAge:" + cachedResponse.currentAge());
+            }
             return null;
         }
 
         Date ifModifiedSince = parseDate(req.headers().get(IF_MODIFIED_SINCE));
         if (ifModifiedSince != null) {
             if (!cachedResponse.modifiedSince(ifModifiedSince.getTime())) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Sending '304 Not Modifed' for " + uri);
+                }
                 return notModifiedResponse(cachedResponse);
             }
+
+            if (logger.isDebugEnabled()) {
+                logger.debug("Cached response is modifed since: " + req.headers().get(IF_MODIFIED_SINCE));
+            }
+
             return null;
         }
 
-        return cache.get(uri);
+        return cachedResponse;
     }
 
     private HttpResponse notModifiedResponse(HttpResponse original) {
@@ -256,8 +322,7 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
         return response;
     }
 
-    private void removeFromCache(HttpRequest currentRequest) {
-        //todo:
-
+    private void removeFromCache(HttpRequest currentRequest, CachedResponse expected) {
+        responseCache.remove(currentRequest.getUri(), expected);
     }
 }

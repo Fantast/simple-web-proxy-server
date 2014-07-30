@@ -7,17 +7,14 @@ import com.dpaulenk.webproxy.outbound.OutboundProxyHandler;
 import com.dpaulenk.webproxy.utils.ProxyUtils;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.ReferenceCounted;
 import org.apache.log4j.Logger;
 
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -123,7 +120,7 @@ public class InboundProxyHandler extends AbstractProxyHandler<HttpRequest, Inbou
 
         stopReading();
 
-        outboundHandler = new OutboundProxyHandler(proxyServer, this, initialRequest);
+        outboundHandler = new OutboundProxyHandler(this);
 
         connectToRemoteServer(hostAndPort, initialRequest);
     }
@@ -133,7 +130,8 @@ public class InboundProxyHandler extends AbstractProxyHandler<HttpRequest, Inbou
             new Bootstrap()
                 .group(proxyServer.getOutboundEventLoopGroup())
                 .channel(NioSocketChannel.class)
-                .handler(new OutboundInitializer(outboundHandler, isConnectRequest(initialRequest)));
+                .handler(
+                    new OutboundInitializer(outboundHandler, isConnectRequest(initialRequest), proxyServer.options().maxChunkSize()));
 
         String remoteHost = hostAndPort;
         int remotePort = 80;
@@ -225,22 +223,6 @@ public class InboundProxyHandler extends AbstractProxyHandler<HttpRequest, Inbou
         writeToChannel(res);
         disconnect();
     }
-
-    private DefaultFullHttpResponse simpleResponse(HttpResponseStatus status, String body) {
-        if (body == null) {
-            return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status);
-        } else {
-            byte[] bytes = body.getBytes(Charset.forName("UTF-8"));
-            ByteBuf buf = Unpooled.copiedBuffer(bytes);
-
-            DefaultFullHttpResponse res = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, buf);
-            res.headers().set(HttpHeaders.Names.CONTENT_LENGTH, bytes.length);
-            res.headers().set(HttpHeaders.Names.CONTENT_TYPE, "text/html; charset=UTF-8");
-
-            return res;
-        }
-    }
-
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
