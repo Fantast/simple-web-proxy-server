@@ -13,7 +13,6 @@ public class WebProxyLauncher {
         //it shouldn't really be a singleton, but for now it's just simplier for it to be
         WebProxyOptions.getInstance().loadFromFile(OPTIONS_FILE);
 
-        //todo: configuration
         new WebProxyServer(WebProxyOptions.getInstance().listenPort()).start();
     }
 }

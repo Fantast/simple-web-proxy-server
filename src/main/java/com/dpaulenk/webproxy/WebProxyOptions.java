@@ -107,8 +107,6 @@ public class WebProxyOptions {
     }
 
     private String[] strinArrayProp(Properties props, String name, String[] defaultValue) {
-
-        //todo: get rid of hardcoded value
         List<String> values = new ArrayList<String>();
         for (int i = 0; i < 50; ++i) {
             String val = props.getProperty(name + "." + i);
