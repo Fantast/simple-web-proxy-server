@@ -14,6 +14,6 @@ public class WebProxyLauncher {
         WebProxyOptions.getInstance().loadFromFile(OPTIONS_FILE);
 
         //todo: configuration
-        new WebProxyServer(8181).start();
+        new WebProxyServer(WebProxyOptions.getInstance().listenPort()).start();
     }
 }

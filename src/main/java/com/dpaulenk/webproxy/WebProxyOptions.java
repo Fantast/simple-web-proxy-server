@@ -19,6 +19,8 @@ public class WebProxyOptions {
 
     private WebProxyOptions() {}
 
+    private int listenPort = 8181;
+
     private int serverThreadsCount = 1;
     private int inboundThreadsCount = 4;
     private int outboundThreadsCount = 4;
@@ -33,6 +35,10 @@ public class WebProxyOptions {
     private boolean cachingEnabled = true;
 
     private String[] blackList = new String[0];
+
+    public int listenPort() {
+        return listenPort;
+    }
 
     public int serverThreadsCount() {
         return serverThreadsCount;
@@ -83,6 +89,7 @@ public class WebProxyOptions {
         try {
             props.load(WebProxyOptions.class.getResourceAsStream(optionsFileUri));
 
+            listenPort = intProp(props, "listenPort", listenPort);
             serverThreadsCount = intProp(props, "serverThreadsCount", serverThreadsCount);
             inboundThreadsCount = intProp(props, "inboundThreadsCount", inboundThreadsCount);
             outboundThreadsCount = intProp(props, "outboundThreadsCount", outboundThreadsCount);
