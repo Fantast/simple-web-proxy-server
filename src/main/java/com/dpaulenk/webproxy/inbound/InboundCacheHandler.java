@@ -37,10 +37,16 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
 
     private final List<HttpContent> currentResponseChunks = new ArrayList<HttpContent>();
 
+    private boolean passThrough = false;
+
     public InboundCacheHandler(WebProxyServer proxyServer) {
         responseCache = proxyServer.getResponseCache();
         maxCachedResponseSize = proxyServer.options().getMaxCachedResponseSize();
         maxCumulationBufferComponents = proxyServer.options().getMaxCumulationBufferComponents();
+    }
+
+    public void setPassThrough(boolean passThrough) {
+        this.passThrough = passThrough;
     }
 
     @Override
@@ -72,7 +78,7 @@ public class InboundCacheHandler extends ChannelDuplexHandler {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof CachedResponse) {
+        if (passThrough || msg instanceof CachedResponse) {
             super.write(ctx, msg, promise);
             return;
         }

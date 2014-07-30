@@ -27,12 +27,12 @@ public class InboundInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast("httpcodec", new HttpServerCodec(8192, 8192 * 2, maxChunkSize));
 
         if (blackList != null && blackList.length > 0) {
-            p.addLast(new InboundFilterHandler(blackList));
+            p.addLast("filter", new InboundFilterHandler(blackList));
         }
 
         if (cachingEnabled) {
-            p.addLast(new InboundCacheHandler(proxyServer));
+            p.addLast("caching", new InboundCacheHandler(proxyServer));
         }
-        p.addLast(new InboundProxyHandler(proxyServer));
+        p.addLast("proxy", new InboundProxyHandler(proxyServer));
     }
 }

@@ -2,8 +2,7 @@ package com.dpaulenk.webproxy.inbound;
 
 import com.dpaulenk.webproxy.cache.CachedResponse;
 import com.dpaulenk.webproxy.utils.ProxyUtils;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 import org.apache.log4j.Logger;
 
@@ -53,10 +52,17 @@ public class InboundFilterHandler extends SimpleChannelInboundHandler<HttpObject
         ctx.fireChannelRead(obj);
     }
 
-    private void sendForbidden(ChannelHandlerContext ctx, HttpRequest req) {
+    private void sendForbidden(final ChannelHandlerContext ctx, HttpRequest req) {
+        final InboundCacheHandler cacheHandler = (InboundCacheHandler) ctx.pipeline().remove("caching");
+        cacheHandler.setPassThrough(true);
         ctx.writeAndFlush(
             simpleResponse(HttpResponseStatus.FORBIDDEN, req.getUri() + " is black-listed.")
-        );
+        ).addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture future) throws Exception {
+                cacheHandler.setPassThrough(false);
+            }
+        });
     }
 
     private boolean shouldBlock(HttpRequest req) {
