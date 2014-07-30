@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="9dd741f0-f90e-4dc8-8008-e275a8a27541" name="Default" comment="mostly done">
-      <change type="DELETED" beforePath="D:\Work\!GitHub\simple-web-proxy-server\src\main\java\com\dpaulenk\Tester.java" afterPath="" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundCacheHandler.java" afterPath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundCacheHandler.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundFilterHandler.java" afterPath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundFilterHandler.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundInitializer.java" afterPath="$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundInitializer.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pom.xml" afterPath="$PROJECT_DIR$/pom.xml" />
+    <list default="true" id="9dd741f0-f90e-4dc8-8008-e275a8a27541" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
     </list>
     <ignored path="simple-web-proxy-server.iws" />
@@ -141,8 +136,8 @@
       <file leaf-file-name="InboundCacheHandler.java" pinned="false" current="true" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundCacheHandler.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.91107076" vertical-offset="1079" max-vertical-offset="5780">
-              <caret line="93" column="9" selection-start-line="93" selection-start-column="9" selection-end-line="93" selection-end-column="9" />
+            <state vertical-scroll-proportion="0.6333938" vertical-offset="1079" max-vertical-offset="5780">
+              <caret line="84" column="0" selection-start-line="84" selection-start-column="0" selection-end-line="84" selection-end-column="0" />
               <folding>
                 <element signature="e#912#925#0" expanded="true" />
                 <element signature="e#1295#1308#0" expanded="true" />
@@ -771,7 +766,8 @@
       <TodoPanelSettings />
     </option>
     <MESSAGE value="mostly done" />
-    <option name="LAST_COMMIT_MESSAGE" value="mostly done" />
+    <MESSAGE value="uber jar" />
+    <option name="LAST_COMMIT_MESSAGE" value="uber jar" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -1208,8 +1204,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main/java/com/dpaulenk/webproxy/inbound/InboundCacheHandler.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.91107076" vertical-offset="1079" max-vertical-offset="5780">
-          <caret line="93" column="9" selection-start-line="93" selection-start-column="9" selection-end-line="93" selection-end-column="9" />
+        <state vertical-scroll-proportion="0.6333938" vertical-offset="1079" max-vertical-offset="5780">
+          <caret line="84" column="0" selection-start-line="84" selection-start-column="0" selection-end-line="84" selection-end-column="0" />
           <folding>
             <element signature="e#912#925#0" expanded="true" />
             <element signature="e#1295#1308#0" expanded="true" />
